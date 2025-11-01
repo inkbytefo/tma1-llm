@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # Developer: inkbytefo
 # AI: Claude Sonnet 4.5
-# Modified: 2024-12-19
+# Modified: 2025-11-01
 """
 ============================================================================
 MorphoPiece Tokenizer Training Script
@@ -78,7 +78,7 @@ def download_mc4_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
         print(f"❌ C4 download error: {e}")
         return False
 
-def download_wikipedia_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
+def download_oscar_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
     """
     OSCAR Turkish corpus indir (updated from deprecated wikipedia)
     
@@ -290,7 +290,7 @@ def train_morphopiece(
             'split_by_unicode_script': True,
             'split_by_whitespace': True,
             'split_by_number': True,
-            'normalization_rule_name': 'nmt_nfkc_cf',  # Turkish-friendly normalization (fixed: typo 'nft' -> 'nmt')
+            'normalization_rule_name': 'nfkc_cf',  # Standard Unicode normalization (casefolded)
             'add_dummy_prefix': True,
             'remove_extra_whitespaces': True,
             'hard_vocab_limit': False,
@@ -428,7 +428,7 @@ def main():
         
         # Download Wikipedia
         if not os.path.exists(wiki_file) or os.path.getsize(wiki_file) < 1000:
-            download_wikipedia_turkish(wiki_file, args.wikipedia_size)
+            download_oscar_turkish(wiki_file, args.wikipedia_size)
         else:
             print(f"✅ Wikipedia corpus already exists: {wiki_file}")
         

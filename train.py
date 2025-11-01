@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Developer: inkbytefo
 # AI: QuantumSoul-Engineer-v1
-# Modified: 2024-12-19
+# Modified: 2025-11-01
 
 """
 ============================================================================
@@ -108,7 +108,8 @@ def train(
 ):
     """Main training loop"""
     model.train()
-    criterion = nn.CrossEntropyLoss(ignore_index=0)  # Ignore padding tokens
+    # Ignore padding tokens using model's configured pad token id
+    criterion = nn.CrossEntropyLoss(ignore_index=model.config.pad_token_id)
     
     total_loss = 0.0
     current_step = start_step
