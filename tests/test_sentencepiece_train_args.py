@@ -28,7 +28,7 @@ def test_sentencepiece_training_without_deprecated_args():
         training_args = {
             "input": corpus,
             "model_prefix": model_prefix,
-            "vocab_size": 64,
+            "vocab_size": 500,  # Increased from 64 to accommodate all required characters
             "model_type": "unigram",
             "character_coverage": 1.0,
             "input_sentence_size": 1000,
