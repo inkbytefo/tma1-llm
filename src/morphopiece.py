@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Developer: inkbytefo
 # AI: Claude Sonnet 4.5
-# Modified: 2024-07-26
+# Modified: 2025-11-01
 
 """
 ============================================================================
@@ -91,7 +91,7 @@ class MorphoPiece:
                 f"--shrinking_factor=0.75 "
                 f"--num_threads=4 "
                 f"--max_sentence_length=4192 "
-                f"--normalization_rule_name=nmt_nfkc_cf "
+                f"--normalization_rule_name=nfkc_cf "
                 f"--byte_fallback=True"
             )
             print(f"\n🚀 Running SentencePiece training...")
