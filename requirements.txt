@@ -1,28 +1,23 @@
-# Developer: inkbytefo
-# AI: QuantumSoul-Engineer-v1
-# Modified: 2024-12-19
-
 # Core ML Framework
-torch>=2.0.0
-torchvision>=0.15.0
+torch>=2.5.0
+torchvision>=0.20.0
 
 # Transformers and Tokenization
-sentencepiece>=0.1.99
-transformers>=4.30.0
+sentencepiece>=0.2.0
+transformers>=4.45.0
 
 # Data Processing
-datasets>=2.12.0
-numpy>=1.24.0
-pandas>=2.0.0
+datasets>=3.0.0
+numpy>=2.0.0
+pandas>=2.2.0,<2.3.0  # TTS uyumu için <2.3.0
 
 # Turkish Morphology
-zemberek-nlp>=0.17.1
-# Alternative: trmorph (if zemberek not available)
+zemberek-python>=0.2.3
+# trmorph alternatifi
 
 # Utilities
-tqdm>=4.65.0
-tensorboard>=2.13.0
+tqdm>=4.66.0
+tensorboard>=2.17.0
 
-# Optional: GPU support (uncomment if CUDA available)
-# torch-audio>=2.0.0
-
+# Optional GPU
+# torchaudio>=2.5.0
