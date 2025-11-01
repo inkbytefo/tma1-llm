@@ -290,7 +290,7 @@ def train_morphopiece(
             'split_by_unicode_script': True,
             'split_by_whitespace': True,
             'split_by_number': True,
-            'normalization_rule_name': 'nft_nfkc_cf',  # Turkish-friendly normalization
+            'normalization_rule_name': 'nmt_nfkc_cf',  # Turkish-friendly normalization (fixed: typo 'nft' -> 'nmt')
             'add_dummy_prefix': True,
             'remove_extra_whitespaces': True,
             'hard_vocab_limit': False,
@@ -492,6 +492,7 @@ def main():
             print("\n" + "=" * 60)
             print("❌ Training failed!")
             print("=" * 60)
+            # Use already imported module-level sys; avoid local import overshadowing
             sys.exit(1)
     
     # Default: run all if no specific step requested
@@ -506,8 +507,7 @@ def main():
         main_args.preprocess = True
         main_args.train = True
         
-        # Recursive call
-        import sys
+        # Recursive call using module-level sys to avoid UnboundLocalError
         sys.argv = [sys.argv[0], '--all']
         main()
 
