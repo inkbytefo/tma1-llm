@@ -1,0 +1,40 @@
+# // Developer: inkbytefo
+# // AI: Claude Sonnet 4.5
+# // Modified: 2025-11-01
+
+# Existing ignores
+.github/instructions/kluster-code-verify.instructions.md
+.kluster
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# OS files
+.DS_Store
+
+# Logs and run artifacts
+logs/
+*.log
+
+# Models and large binaries
+models/
+*.pt
+*.ckpt
+
+# Tokenizer binaries
+tokenizer/
+
+# Training outputs
+models/**
+logs/**
+
+# Data (keep tiny corpus tracked)
+data/
+!data/tiny_corpus.txt

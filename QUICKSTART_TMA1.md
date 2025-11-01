@@ -1,0 +1,146 @@
+# 🚀 TMA-1 Quick Start - MorphoPiece Tokenizer Eğitimi
+
+## Hızlı Başlangıç
+
+```bash
+# Tüm adımları otomatik çalıştır
+python src/train_morphopiece.py --all
+
+# Adım adım
+python src/train_morphopiece.py --download      # 1. Veri indir
+python src/train_morphopiece.py --preprocess   # 2. Morfem ayrımı ile işle
+python src/train_morphopiece.py --train        # 3. Tokenizer eğit
+```
+
+## Detaylı Kullanım
+
+### 1. Veri İndirme (1.5 GB)
+
+```bash
+# MC4 (0.75 GB) + Wikipedia (0.75 GB)
+python src/train_morphopiece.py --download \
+    --mc4-size 0.75 \
+    --wikipedia-size 0.75 \
+    --corpus-file data/corpus_combined.txt
+```
+
+**Çıktı:**
+- `data/mc4_turkish.txt` (0.75 GB)
+- `data/wikipedia_turkish.txt` (0.75 GB)
+- `data/corpus_combined.txt` (1.5 GB)
+
+### 2. Morfem Ayrımı ile Ön İşleme
+
+```bash
+# Zemberek ile morfem ayrımı
+python src/train_morphopiece.py --preprocess \
+    --corpus-file data/corpus_combined.txt \
+    --preprocessed-file data/corpus_morpho_processed.txt
+```
+
+**İşlem:**
+- Her kelime → kök + ekler
+- Örnek: "Evlerimdekiler" → "ev ler im de ki ler"
+
+**Çıktı:**
+- `data/corpus_morpho_processed.txt` (morfem ayrımı yapılmış)
+
+### 3. MorphoPiece Tokenizer Eğitimi
+
+```bash
+# SentencePiece ile tokenizer eğit
+python src/train_morphopiece.py --train \
+    --preprocessed-file data/corpus_morpho_processed.txt \
+    --output tokenizer/morphopiece \
+    --vocab-size 32000 \
+    --model-type unigram \
+    --character-coverage 1.0
+```
+
+**Parametreler:**
+- `vocab_size=32000`: Vocabulary boyutu
+- `model_type='unigram'`: Unigram modeli
+- `character_coverage=1.0`: Tam karakter kapsamı
+
+**Çıktı:**
+- `tokenizer/morphopiece.model` - SentencePiece model
+- `tokenizer/morphopiece.vocab` - Vocabulary dosyası
+- `tokenizer/morphopiece_vocab.json` - JSON format vocabulary
+
+## Kullanım
+
+```python
+from src.morphopiece import MorphoPiece
+
+# Tokenizer yükle
+morphopiece = MorphoPiece("tokenizer/morphopiece.model")
+
+# Morfem-aware encoding
+tokens = morphopiece.encode(
+    "Dün markete gittim",
+    morpho_aware=True,
+    out_type=int
+)
+# Output: [1234, 5678, 9012, ...]  # Kök ve ekler ayrı token'lar
+
+# Decoding
+text = morphopiece.decode(tokens)
+# Output: "Dün markete gittim"
+```
+
+## Özellikler
+
+✅ **Morfem Ayrımı**: Zemberek ile kök + ek ayrımı  
+✅ **Kök = Ayrı Token**: Kökler ayrı token olarak saklanır  
+✅ **Ek = Ayrı Token**: Ekler ayrı token olarak saklanır  
+✅ **1.5 GB Corpus**: MC4 + Wikipedia Türkçe  
+✅ **32k Vocab**: 32,000 token vocabulary  
+✅ **Unigram Model**: SentencePiece unigram algoritması  
+✅ **Character Coverage 1.0**: Tüm karakterleri kapsar  
+
+## Süre Tahmini
+
+| Adım | Süre |
+|------|------|
+| Veri İndirme | 10-30 dk (internet hızına bağlı) |
+| Morfem Ön İşleme | 30-60 dk (corpus boyutuna bağlı) |
+| Tokenizer Eğitimi | 10-30 dk (CPU'ya bağlı) |
+| **Toplam** | **50-120 dk** |
+
+## Notlar
+
+- İlk çalıştırmada internet bağlantısı gerekli (veri indirme)
+- Morfem analizi zaman alabilir (1.5 GB corpus)
+- Tokenizer eğitimi CPU-intensive (multi-threading kullanır)
+- Çıktı dosyaları ~100-200 MB olabilir
+
+## Sorun Giderme
+
+### "datasets not found"
+```bash
+pip install datasets
+```
+
+### "sentencepiece not found"
+```bash
+pip install sentencepiece
+```
+
+### "Memory error"
+- `--max-lines` parametresiyle satır sayısını sınırlayın
+- Örnek: `--max-lines 1000000`
+
+### "Download timeout"
+- Daha küçük corpus boyutu deneyin
+- Örnek: `--mc4-size 0.5 --wikipedia-size 0.5`
+
+## Sonraki Adımlar
+
+1. ✅ MorphoPiece tokenizer hazır
+2. 🔄 TMA-1 model eğitimi (`train.py` ile)
+3. 🔄 Inference test (`llm_engine.py` ile)
+
+---
+
+**"Morfem farkındalığı = Türkçe'nin DNA'sı"** 🧬
+

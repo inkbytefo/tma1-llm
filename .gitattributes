@@ -1,0 +1,14 @@
+# // Developer: inkbytefo
+# // AI: Claude Sonnet 4.5
+# // Modified: 2025-11-01
+
+# Normalize line endings for text files
+* text=auto
+
+# Treat common binary formats explicitly
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pt binary
+*.ckpt binary
