@@ -190,24 +190,32 @@ def train_tma1(
         target_ids = batch['target_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         
-        # Get token texts for morphological analysis
-        token_texts = []
-        for b_idx in range(input_ids.shape[0]):
-            batch_tokens = []
-            for s_idx in range(input_ids.shape[1]):
-                token_id = input_ids[b_idx, s_idx].item()
-                if token_id < len(vocab):
-                    batch_tokens.append(vocab[token_id])
-                else:
-                    batch_tokens.append("")
-            token_texts.append(batch_tokens)
+        # Get morpho_types from batch (if available - from preprocessing)
+        morpho_types = None
+        if 'morpho_types' in batch:
+            morpho_types = batch['morpho_types'].to(device)
+        
+        # Fallback: Get token texts only if morpho_types not available (SLOW)
+        token_texts = None
+        if morpho_types is None:
+            token_texts = []
+            for b_idx in range(input_ids.shape[0]):
+                batch_tokens = []
+                for s_idx in range(input_ids.shape[1]):
+                    token_id = input_ids[b_idx, s_idx].item()
+                    if token_id < len(vocab):
+                        batch_tokens.append(vocab[token_id])
+                    else:
+                        batch_tokens.append("")
+                token_texts.append(batch_tokens)
         
         # Forward pass (TMA-1 with grammar bias)
         logits, _ = model(
             input_ids,
             attention_mask=attention_mask,
+            morpho_types=morpho_types,
             token_texts=token_texts,
-            vocab=vocab,
+            vocab=vocab if morpho_types is None else None,
             use_cache=False
         )
         
@@ -273,23 +281,31 @@ def train_tma1(
                     val_target_ids = val_batch['target_ids'].to(device)
                     val_attention_mask = val_batch['attention_mask'].to(device)
                     
-                    # Token texts
-                    val_token_texts = []
-                    for b_idx in range(val_input_ids.shape[0]):
-                        batch_tokens = []
-                        for s_idx in range(val_input_ids.shape[1]):
-                            token_id = val_input_ids[b_idx, s_idx].item()
-                            if token_id < len(vocab):
-                                batch_tokens.append(vocab[token_id])
-                            else:
-                                batch_tokens.append("")
-                        val_token_texts.append(batch_tokens)
+                    # Get morpho_types from batch (if available)
+                    val_morpho_types = None
+                    if 'morpho_types' in val_batch:
+                        val_morpho_types = val_batch['morpho_types'].to(device)
+                    
+                    # Fallback: Get token texts only if morpho_types not available
+                    val_token_texts = None
+                    if val_morpho_types is None:
+                        val_token_texts = []
+                        for b_idx in range(val_input_ids.shape[0]):
+                            batch_tokens = []
+                            for s_idx in range(val_input_ids.shape[1]):
+                                token_id = val_input_ids[b_idx, s_idx].item()
+                                if token_id < len(vocab):
+                                    batch_tokens.append(vocab[token_id])
+                                else:
+                                    batch_tokens.append("")
+                            val_token_texts.append(batch_tokens)
                     
                     val_logits, _ = model(
                         val_input_ids,
                         attention_mask=val_attention_mask,
+                        morpho_types=val_morpho_types,
                         token_texts=val_token_texts,
-                        vocab=vocab
+                        vocab=vocab if val_morpho_types is None else None
                     )
                     
                     val_logits = val_logits.reshape(-1, val_logits.size(-1))
@@ -456,14 +472,24 @@ def main():
     
     if not os.path.exists(args.corpus):
         print(f"❌ Corpus file not found: {args.corpus}")
-        print(f"💡 Preprocess corpus first: python src/train_morphopiece.py --preprocess")
+        print(f"💡 Preprocess corpus first: python scripts/preprocess_for_tma1.py")
         return
+    
+    # Check if corpus is JSONL (preprocessed) or text
+    is_jsonl = args.corpus.endswith('.jsonl')
+    if is_jsonl:
+        print(f"   Format: JSONL (preprocessed with morpho_types)")
+    else:
+        print(f"   Format: Text (will use fallback token_texts)")
+        print(f"   ⚠️  WARNING: Using text format is SLOW! Preprocess corpus first:")
+        print(f"      python scripts/preprocess_for_tma1.py --input {args.corpus} --output {args.corpus}.jsonl --tokenizer {args.tokenizer}")
     
     # Use MorphoPiece tokenizer for dataset
     dataset = TurkishTextDataset(
         corpus_file=args.corpus,
         tokenizer=tokenizer.sp_processor,  # Use SentencePiece processor directly
-        max_seq_len=args.max_seq_len
+        max_seq_len=args.max_seq_len,
+        is_jsonl=is_jsonl
     )
     
     dataloader = DataLoader(

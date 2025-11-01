@@ -53,6 +53,7 @@ class TMA1TransformerLayer(nn.Module):
         self,
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
+        morpho_types: Optional[torch.Tensor] = None,
         token_texts: Optional[List[List[str]]] = None,
         past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         use_cache: bool = False
@@ -64,6 +65,7 @@ class TMA1TransformerLayer(nn.Module):
         attn_output, present_key_value = self.attention(
             hidden_states,
             attention_mask=attention_mask,
+            morpho_types=morpho_types,
             token_texts=token_texts,
             past_key_value=past_key_value,
             use_cache=use_cache
@@ -181,6 +183,7 @@ class TMA1Model(nn.Module):
         self,
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
+        morpho_types: Optional[torch.Tensor] = None,
         token_texts: Optional[List[List[str]]] = None,
         past_key_values: Optional[List] = None,
         use_cache: bool = False,
@@ -192,10 +195,11 @@ class TMA1Model(nn.Module):
         Args:
             input_ids: [batch, seq_len]
             attention_mask: [batch, seq_len]
-            token_texts: Token string listesi (opsiyonel)
+            morpho_types: Morfolojik tip tensor [batch, seq_len] (öncelikli)
+            token_texts: Token string listesi (fallback, sadece morpho_types yoksa)
             past_key_values: KV cache
             use_cache: Cache kullanılsın mı?
-            vocab: Vocabulary (token_texts için)
+            vocab: Vocabulary (token_texts için, fallback)
         
         Returns:
             logits: [batch, seq_len, vocab_size]
@@ -209,8 +213,8 @@ class TMA1Model(nn.Module):
         # Add positional encoding
         hidden_states = hidden_states + self.pos_encoding[:, :seq_len, :]
         
-        # Get token texts if not provided
-        if token_texts is None and vocab is not None:
+        # Get token texts if not provided and needed (fallback only)
+        if token_texts is None and vocab is not None and morpho_types is None:
             token_texts = self._get_token_texts(input_ids, vocab)
         
         # Process through TMA-1 layers
@@ -224,6 +228,7 @@ class TMA1Model(nn.Module):
             hidden_states, present_key_value = layer(
                 hidden_states,
                 attention_mask=attention_mask,
+                morpho_types=morpho_types,
                 token_texts=token_texts,
                 past_key_value=past_key_value,
                 use_cache=use_cache

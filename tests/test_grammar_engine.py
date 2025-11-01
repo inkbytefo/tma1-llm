@@ -251,7 +251,7 @@ def test_device_compatibility(grammar_engine):
         assert mask_cuda.device == cuda_device, "Mask should be on CUDA device"
 
 def test_performance_with_large_vocabulary(grammar_engine):
-    """Test performance with large vocabulary"""
+    """Test performance with large vocabulary (vectorized version)"""
     import torch
     import time
     
@@ -267,7 +267,111 @@ def test_performance_with_large_vocabulary(grammar_engine):
     )
     end_time = time.time()
     
-    # Should complete within reasonable time (< 1 second)
-    assert end_time - start_time < 1.0, "Should process large vocabulary quickly"
+    # Should complete within reasonable time (< 1 second for vectorized version)
+    assert end_time - start_time < 1.0, "Should process large vocabulary quickly (vectorized)"
     assert isinstance(biased_logits, torch.Tensor), "Should return tensor"
     assert biased_logits.shape == logits.shape, "Output shape should match input shape"
+
+def test_vectorized_grammar_bias_batch(grammar_engine):
+    """Test vectorized grammar bias with batch processing"""
+    import torch
+    
+    vocab = ["ev", "ler", "lar", "de", "da", "kitap", "güzel", "bir"]
+    batch_size = 2
+    seq_len = 3
+    vocab_size = len(vocab)
+    
+    logits = torch.randn(batch_size, seq_len, vocab_size)
+    # Previous tokens as list of lists (batch-wise)
+    previous_tokens = [
+        ["ev", "ler", "im"],  # Batch 0
+        ["kitap", "lar", "ım"]  # Batch 1
+    ]
+    
+    biased_logits = grammar_engine.apply_grammar_bias(
+        logits, vocab, previous_tokens
+    )
+    
+    assert isinstance(biased_logits, torch.Tensor), "Should return tensor"
+    assert biased_logits.shape == logits.shape, "Output shape should match input shape"
+    assert biased_logits.shape == (batch_size, seq_len, vocab_size), \
+        f"Expected shape {(batch_size, seq_len, vocab_size)}, got {biased_logits.shape}"
+
+def test_vectorized_grammar_bias_flat_tokens(grammar_engine):
+    """Test vectorized grammar bias with flat token list"""
+    import torch
+    
+    vocab = ["ev", "ler", "lar", "de", "da"]
+    vocab_size = len(vocab)
+    
+    logits = torch.randn(1, 1, vocab_size)
+    # Flat list instead of nested
+    previous_tokens = ["ev"]
+    
+    biased_logits = grammar_engine.apply_grammar_bias(
+        logits, vocab, previous_tokens
+    )
+    
+    assert isinstance(biased_logits, torch.Tensor), "Should return tensor"
+    assert biased_logits.shape == logits.shape, "Output shape should match input shape"
+
+def test_vocab_cache_system(grammar_engine):
+    """Test that vocabulary cache is built and reused"""
+    import torch
+    
+    vocab1 = ["ev", "ler", "lar"]
+    vocab2 = ["ev", "ler", "lar", "de"]  # Different vocab
+    
+    device = torch.device("cpu")
+    
+    # First call - should build cache
+    grammar_engine._build_vocab_cache(vocab1, device)
+    assert grammar_engine._vocab_cache is not None, "Cache should be built"
+    assert grammar_engine._vocab_first_vowels is not None, "First vowels should be cached"
+    assert grammar_engine._vocab_cache['vocab_size'] == len(vocab1), "Cache should match vocab1"
+    
+    # Cache should have correct size
+    assert grammar_engine._vocab_first_vowels.shape[0] == len(vocab1), \
+        "Cached first vowels should match vocab size"
+    
+    # Second call with different vocab - should rebuild
+    grammar_engine._build_vocab_cache(vocab2, device)
+    assert grammar_engine._vocab_cache['vocab_size'] == len(vocab2), "Cache should be rebuilt for vocab2"
+
+def test_extract_last_vowel_vectorized(grammar_engine):
+    """Test vectorized last vowel extraction"""
+    import torch
+    
+    tokens = ["ev", "ler", "kitap", "lar", "güzel", "de"]
+    device = torch.device("cpu")
+    
+    last_vowels = grammar_engine._extract_last_vowel_vectorized(tokens, device)
+    
+    assert isinstance(last_vowels, torch.Tensor), "Should return tensor"
+    assert last_vowels.shape[0] == len(tokens), "Should have one value per token"
+    assert last_vowels.dtype == torch.long, "Should be long dtype"
+    
+    # Values should be 0 (back), 1 (front), or 2 (no vowel)
+    assert torch.all((last_vowels >= 0) & (last_vowels <= 2)), \
+        "Last vowels should be in range [0, 2]"
+
+def test_check_vowel_harmony_vectorized(grammar_engine):
+    """Test vectorized vowel harmony checking"""
+    import torch
+    
+    # Build vocab cache first
+    vocab = ["ev", "ler", "lar", "kitap", "de", "da"]
+    device = torch.device("cpu")
+    grammar_engine._build_vocab_cache(vocab, device)
+    
+    # Last vowels for 3 positions
+    last_vowels = torch.tensor([1, 0, 2], dtype=torch.long, device=device)  # front, back, no_vowel
+    
+    harmony_mask = grammar_engine._check_vowel_harmony_vectorized(
+        last_vowels, grammar_engine._vocab_first_vowels
+    )
+    
+    assert isinstance(harmony_mask, torch.Tensor), "Should return tensor"
+    assert harmony_mask.shape == (3, len(vocab)), \
+        f"Expected shape (3, {len(vocab)}), got {harmony_mask.shape}"
+    assert harmony_mask.dtype == torch.bool, "Should be boolean mask"

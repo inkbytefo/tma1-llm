@@ -105,7 +105,7 @@ class AgglutinativeAttention(nn.Module):
         device: torch.device
     ) -> torch.Tensor:
         """
-        Morfolojik tip bazlı bias maskesi oluştur
+        Morfolojik tip bazlı bias maskesi oluştur (training için - tüm sequence)
         
         Args:
             seq_len: Sequence length
@@ -148,10 +148,54 @@ class AgglutinativeAttention(nn.Module):
         
         return bias_mask
     
+    def _create_morpho_bias_mask_for_new_tokens(
+        self,
+        new_morpho_types: torch.Tensor,
+        kv_seq_len: int,
+        new_seq_len: int,
+        device: torch.device
+    ) -> torch.Tensor:
+        """
+        Yeni token'lar için morfolojik bias maskesi oluştur (generation için)
+        
+        Args:
+            new_morpho_types: Yeni token'ların morfolojik tipleri [batch, new_seq_len]
+            kv_seq_len: KV cache dahil toplam sequence uzunluğu
+            new_seq_len: Yeni token sayısı (genelde 1)
+            device: Device
+        
+        Returns:
+            Bias maskesi [batch, num_heads, new_seq_len, kv_seq_len]
+        """
+        batch_size = new_morpho_types.shape[0]
+        bias_mask = torch.zeros(batch_size, self.num_heads, new_seq_len, kv_seq_len, device=device)
+        
+        for b in range(batch_size):
+            for i in range(new_seq_len):
+                morpho_type_i = new_morpho_types[b, i].item()
+                new_token_pos = kv_seq_len - new_seq_len + i
+                
+                # Yüklem token'ına ekstra dikkat
+                if morpho_type_i == 2:  # Verb
+                    # Yeni token yüklem ise, tüm önceki token'lara dikkat çek
+                    bias_mask[b, :, i, :new_token_pos] += self.verb_bias * 0.5
+                
+                # Kök token'larına bias
+                elif morpho_type_i == 0:  # Root
+                    # Kök token'larına genel bias
+                    bias_mask[b, :, i, :] += self.root_bias * 0.3
+                
+                # Ek token'larına daha az bias
+                elif morpho_type_i == 1:  # Suffix
+                    bias_mask[b, :, i, :] += self.suffix_bias * 0.2
+        
+        return bias_mask
+    
     def forward(
         self,
         hidden_states: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
+        morpho_types: Optional[torch.Tensor] = None,
         token_texts: Optional[List[List[str]]] = None,
         past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         use_cache: bool = False
@@ -162,7 +206,9 @@ class AgglutinativeAttention(nn.Module):
         Args:
             hidden_states: [batch, seq_len, hidden_size]
             attention_mask: [batch, seq_len] or [batch, seq_len, seq_len]
-            token_texts: Token string listesi (morfem analizi için)
+            morpho_types: Morfolojik tip tensor [batch, seq_len] (0=root, 1=suffix, 2=verb, 3=other, 4=pad)
+                          Öncelikli: Preprocessing ile önceden hesaplanmış tensor kullanılmalı
+            token_texts: Token string listesi (fallback, sadece morpho_types yoksa kullanılır)
             past_key_value: KV cache
             use_cache: Cache kullanılsın mı?
         
@@ -188,45 +234,54 @@ class AgglutinativeAttention(nn.Module):
             key = torch.cat([past_key, key], dim=2)
             value = torch.cat([past_value, value], dim=2)
         
-        # DEĞİŞİKLİK 1: kv_seq_len'i her zaman key'in uzunluğundan al
+        # kv_seq_len'i her zaman key'in uzunluğundan al
         kv_seq_len = key.shape[2]
         
         # Compute attention scores: Q @ K^T
         scores = torch.matmul(query, key.transpose(-2, -1)) * self.scale  # [batch, heads, seq_len, kv_seq_len]
         
         # Morfolojik bias ekle
-        if token_texts:
-            # DEĞİŞİKLİK 2: Bias maskesini tüm KV dizisi için oluştur
+        if morpho_types is not None:
+            # Preprocessing ile önceden hesaplanmış morpho_types kullan (ÖNCELİKLİ)
+            # morpho_types: [batch, seq_len] - sadece yeni token'lar için
+            
+            # KV cache varsa, past morpho_types ile birleştirmemiz gerekir
+            # Şimdilik sadece yeni token'lar için bias uygula
+            if past_key_value is not None:
+                # Generate sırasında: sadece yeni token'ın bias'ını ekle
+                # Past KV için morpho_types bilgisi yok, sadece yeni token'a bias uygula
+                morpho_bias = self._create_morpho_bias_mask_for_new_tokens(
+                    morpho_types, kv_seq_len, seq_len, hidden_states.device
+                )
+            else:
+                # Training sırasında: tüm sequence için bias
+                morpho_bias = self._create_morpho_bias_mask(kv_seq_len, morpho_types, hidden_states.device)
+            
+            # Bias'ı ekle
+            if scores.shape == morpho_bias.shape:
+                scores = scores + morpho_bias
+            elif morpho_bias.shape[-2] == seq_len and morpho_bias.shape[-1] == kv_seq_len:
+                scores = scores + morpho_bias
+        elif token_texts:
+            # Fallback: token_texts ile runtime analiz (YAVAŞ - sadece gerektiğinde)
             # Token ID'leri, tüm metnin uzunluğuna göre (kv_seq_len) oluşturulmalı
             token_ids = torch.arange(kv_seq_len, device=hidden_states.device).unsqueeze(0).expand(batch_size, -1)
             
-            # token_texts'in de tüm metni içermesi gerekir.
-            # `generate` döngüsünde token_texts'in güncellendiğini varsayıyoruz.
-            morpho_types = self._identify_morpho_types(token_ids, token_texts)
+            # Runtime morphological analysis (SLOW)
+            computed_morpho_types = self._identify_morpho_types(token_ids, token_texts)
             
             # Maskeyi tam boyutta (kv_seq_len x kv_seq_len) oluştur
-            morpho_bias = self._create_morpho_bias_mask(kv_seq_len, morpho_types, hidden_states.device)
-            
-            # DEĞİŞİKLİK 3: Sadece ilgili 'query' satırlarını al
-            # `scores` tensörü sadece yeni token'a ait satırları içerir (seq_len).
-            # Bu yüzden bias maskesinden de sadece bu satırları almalıyız.
-            # Üretim sırasında, `seq_len` genellikle 1'dir.
-            # `past_key_value` varsa, bu, üretim döngüsünün ikinci veya sonraki adımıdır.
             if past_key_value is not None:
-                # Sadece son `seq_len` kadar satırı al
-                relevant_bias = morpho_bias[:, :, -seq_len:, :]
+                # Generate sırasında: sadece yeni token için
+                morpho_bias = self._create_morpho_bias_mask_for_new_tokens(
+                    computed_morpho_types[:, -seq_len:], kv_seq_len, seq_len, hidden_states.device
+                )
             else:
-                # İlk adımda, tüm maskeyi kullan
-                relevant_bias = morpho_bias
+                morpho_bias = self._create_morpho_bias_mask(kv_seq_len, computed_morpho_types, hidden_states.device)
             
-            # Boyutları kontrol et ve bias'ı ekle
-            if scores.shape == relevant_bias.shape:
-                scores = scores + relevant_bias
-            else:
-                # Boyut uyuşmazlığı durumunda uyarı ver ve devam et (daha sağlam)
-                # Bu genellikle `token_texts`'in `generate` döngüsünde güncellenmemesinden kaynaklanır.
-                # Şimdilik bu hatayı atlayarak devam etmesini sağlayabiliriz.
-                pass
+            # Bias'ı ekle
+            if scores.shape == morpho_bias.shape:
+                scores = scores + morpho_bias
         
         # Apply attention mask
         if attention_mask is not None:

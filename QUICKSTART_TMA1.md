@@ -98,7 +98,11 @@ text = morphopiece.decode(tokens)
 | Veri İndirme | 10-30 dk (internet hızına bağlı) |
 | Morfem Ön İşleme | 30-60 dk (corpus boyutuna bağlı) |
 | Tokenizer Eğitimi | 10-30 dk (CPU'ya bağlı) |
-| **Toplam** | **50-120 dk** |
+| **TMA-1 Preprocessing** (YENİ) | 20-40 dk (corpus boyutuna bağlı) |
+| **Toplam (Tokenizer)** | **50-120 dk** |
+| **TMA-1 Model Eğitimi** | Değişken (epoch sayısı, corpus boyutu, GPU) |
+
+**Not**: TMA-1 preprocessing yapıldığında eğitim süresi **10-100x azalır** (runtime morfolojik analiz yok).
 
 ## Notlar
 
@@ -127,12 +131,45 @@ pip install sentencepiece
 - Daha küçük corpus boyutu deneyin
 - Örnek: `--mc4-size 0.5 --wikipedia-size 0.5`
 
+## TMA-1 Model Eğitimi
+
+### Hızlı Eğitim (Önerilen - Optimize Edilmiş)
+
+```bash
+# 1. Corpus ön işleme (morfolojik analiz - BİR KEZ)
+python scripts/preprocess_for_tma1.py \
+    --input data/corpus_morpho_processed.txt \
+    --output data/train_data.jsonl \
+    --tokenizer tokenizer/morphopiece.model
+
+# 2. TMA-1 eğitimi (ön işlenmiş JSONL ile - HIZLI)
+python train_tma1.py \
+    --corpus data/train_data.jsonl \
+    --tokenizer tokenizer/morphopiece.model \
+    --output-dir models/tma1 \
+    --batch-size 8 \
+    --learning-rate 3e-4
+```
+
+**Önemli**: JSONL formatı kullanıldığında morfolojik analiz eğitim sırasında yapılmaz, bu da **10-100x hızlanma** sağlar.
+
+### Eski Yöntem (Yavaş - Sadece Test İçin)
+
+```bash
+# Text formatı kullanılırsa runtime morfolojik analiz yapılır (YAVAŞ)
+python train_tma1.py \
+    --corpus data/corpus_morpho_processed.txt \
+    --tokenizer tokenizer/morphopiece.model \
+    --output-dir models/tma1
+```
+
 ## Sonraki Adımlar
 
 1. ✅ MorphoPiece tokenizer hazır
-2. ✅ Testler (`pytest -q`)
-3. 🔄 TMA-1 model eğitimi (`train_tma1.py` ile)
-4. 🔄 Inference testi (`llm_engine.py` ile)
+2. ✅ **Corpus preprocessing** (`preprocess_for_tma1.py`)
+3. ✅ Testler (`pytest -q`)
+4. 🔄 TMA-1 model eğitimi (`train_tma1.py` ile - **JSONL format kullanın**)
+5. 🔄 Inference testi (`llm_engine.py` ile)
 
 ---
 

@@ -45,6 +45,7 @@ def test_padding_uses_unk_when_pad_disabled():
             corpus_file=tmp_path,
             tokenizer=sp,
             max_seq_len=32,
+            is_jsonl=False  # Explicitly test text format
         )
 
         item = ds[0]
