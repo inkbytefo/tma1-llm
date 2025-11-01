@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # Developer: inkbytefo
-# AI: QuantumSoul-Engineer-v1
+# AI: Claude Sonnet 4.5
 # Modified: 2024-12-19
 
 """
@@ -17,13 +18,13 @@ import argparse
 
 def download_turkish_corpus(output_path: str = "data/corpus.txt", max_size_gb: float = 1.0):
     """
-    Download Turkish text from MC4 dataset and save to corpus file
+    Download Turkish text from C4 dataset and save to corpus file (updated from deprecated mc4)
     
     Args:
         output_path: Output file path for corpus
         max_size_gb: Maximum corpus size in GB
     """
-    print("📥 Downloading Turkish corpus from MC4 dataset...")
+    print("📥 Downloading Turkish corpus from C4 dataset...")
     print(f"   Target size: {max_size_gb} GB")
     print("")
     
@@ -31,9 +32,9 @@ def download_turkish_corpus(output_path: str = "data/corpus.txt", max_size_gb: f
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else ".", exist_ok=True)
     
     try:
-        # Load MC4 Turkish dataset
-        print("🔍 Loading MC4 Turkish dataset...")
-        dataset = load_dataset("mc4", "tr", streaming=True)
+        # Load C4 Turkish dataset
+        print("🔍 Loading C4 Turkish dataset...")
+        dataset = load_dataset("allenai/c4", "tr", streaming=True)
         
         # Calculate target size in bytes
         max_size_bytes = int(max_size_gb * 1024 * 1024 * 1024)

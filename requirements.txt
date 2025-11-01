@@ -1,14 +1,12 @@
 # Core ML Framework
-torch>=2.5.0
-torchvision>=0.20.0
-
+torch>=2.9.0
+torchvision>=0.24.0
 # Transformers and Tokenization
-sentencepiece>=0.2.0
-transformers>=4.45.0
+sentencepiece>=0.2.1
+transformers>=4.57.1
 
 # Data Processing
-datasets>=3.0.0
-numpy>=2.0.0
+datasets>=4.3.0
 pandas>=2.2.0,<2.3.0  # TTS uyumu için <2.3.0
 
 # Turkish Morphology
@@ -17,7 +15,7 @@ zemberek-python>=0.2.3
 
 # Utilities
 tqdm>=4.66.0
-tensorboard>=2.17.0
+tensorboard>=2.20.0
 
 # Optional GPU
 # torchaudio>=2.5.0

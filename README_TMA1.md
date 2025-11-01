@@ -1,8 +1,12 @@
+// Developer: inkbytefo
+// AI: Trae Coding Assistant
+// Modified: 2025-11-01
+
 # 🧠 TMA-1: Türkçe Mantık Ağı
 
 > **Morfem farkındalıklı, eklemeli yapıya özel transformer modeli**
 
-TMA-1, Türkçe'nin eklemeli yapısını modelin DNA'sına yerleştiren, morfolojik farkındalığa sahip bir transformer modelidir.
+TMA-1, Türkçe'nin eklemeli yapısını modelin DNA'sına yerleştiren, morfolojik farkındalığa sahip bir transformer modelidir. Bu doküman, proje yapısıyla uyumlu, profesyonel kullanım talimatları ve açıklamalar içerir.
 
 ## 🎯 TMA-1 Özellikleri
 
@@ -14,7 +18,7 @@ TMA-1, Türkçe'nin eklemeli yapısını modelin DNA'sına yerleştiren, morfolo
 ### 2. MorphoPiece Tokenizer
 - SentencePiece + morfem analizi kombinasyonu
 - Kökler ve ekler ayrı token'lar
-- %50 daha az token, daha fazla anlam
+- Morfoloji-aware eğitim ve encoding opsiyonu
 
 ### 3. Agglutinative Attention
 - SOV yapısına göre özel attention
@@ -31,6 +35,7 @@ TMA-1, Türkçe'nin eklemeli yapısını modelin DNA'sına yerleştiren, morfolo
 - Morfem farkındalıklı transformer
 - Grammar-aware generation
 - Türkçe'ye özel mimari
+- `AgglutinativeAttention` ve `GrammarEngine` ile logit/attention bias
 
 ## 🚀 Kullanım
 
@@ -103,13 +108,17 @@ logits, _ = model(input_ids, vocab=vocab_list)
 
 ## 🔧 Eğitim
 
-TMA-1 modelini eğitmek için `train.py`'yi güncelleyin:
+Komut satırı örnekleri:
 
-```python
-from src.tma1_model import TMA1Model
+```bash
+# MorphoPiece eğitimi (morfem ön işlemeyle)
+python src/train_morphopiece.py --preprocess --corpus-file data/test_corpus.txt --preprocessed-file data/corpus_morpho_processed.txt --train --output tokenizer/morphopiece --vocab-size 1000
 
-# Standart model yerine TMA-1 kullan
-model = TMA1Model(config, use_grammar_bias=True)
+# Baseline Transformer eğitimi
+python train.py --corpus data/test_corpus.txt --tokenizer tokenizer/morphopiece.model --output-dir models/baseline
+
+# TMA-1 eğitimi
+python train_tma1.py --corpus data/test_corpus.txt --tokenizer tokenizer/morphopiece.model --output-dir models/tma1
 ```
 
 ## 📝 Örnek Çıktı
@@ -124,14 +133,14 @@ model = TMA1Model(config, use_grammar_bias=True)
 
 ## 🎯 Sonraki Adımlar
 
-1. ✅ Morfem ayrımı (Zemberek)
+1. ✅ Morfem ayrımı (Zemberek/regex fallback)
 2. ✅ MorphoPiece tokenizer
 3. ✅ Agglutinative attention
 4. ✅ Grammar engine
 5. ✅ TMA-1 model
-6. 🔄 TMA-1 eğitimi
-7. 🔄 Değerlendirme metrikleri
-8. 🔄 Fine-tuning
+6. ✅ Testler (`pytest -q`)
+7. 🔄 Geniş corpus ile uzun eğitim
+8. 🔄 Değerlendirme metrikleri ve fine-tuning
 
 ## 📚 Dosya Yapısı
 
@@ -145,6 +154,8 @@ src/
 ```
 
 ---
+
+**Sahiplik ve Lisans:** Bu proje ve modeller Tevfik İşkın'a aittir. Ayrıntılar için `LICENSE.md`.
 
 **"Türkçe'nin eklemeli yapısı = Model'in DNA'sı"** 🚀
 

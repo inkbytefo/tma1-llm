@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # Developer: inkbytefo
-# AI: QuantumSoul-Engineer-v1
+# AI: Claude Sonnet 4.5
 # Modified: 2024-12-19
-
 """
 ============================================================================
 MorphoPiece Tokenizer Training Script
-1.5 GB Türkçe corpus (MC4 + Wikipedia) ile morfem farkındalıklı tokenizer eğitimi
+1.5 GB Türkçe corpus (C4 + OSCAR) ile morfem farkındalıklı tokenizer eğitimi
 ============================================================================
 """
 
@@ -30,7 +30,7 @@ from src.morpho_splitter import MorphoSplitter
 
 def download_mc4_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
     """
-    MC4 Turkish corpus indir
+    C4 Turkish corpus indir (updated from deprecated mc4)
     
     Args:
         output_file: Çıktı dosyası
@@ -39,11 +39,11 @@ def download_mc4_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
     Returns:
         Başarılı mı?
     """
-    print(f"📥 Downloading MC4 Turkish corpus...")
+    print(f"📥 Downloading C4 Turkish corpus...")
     print(f"   Target size: {max_size_gb} GB")
     
     try:
-        dataset = load_dataset("mc4", "tr", streaming=True)
+        dataset = load_dataset("allenai/c4", "tr", streaming=True)
         max_size_bytes = int(max_size_gb * 1024 * 1024 * 1024)
         
         total_size = 0
@@ -51,7 +51,7 @@ def download_mc4_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
         min_text_length = 100
         
         with open(output_file, 'w', encoding='utf-8') as f:
-            for item in tqdm(dataset['train'], desc="MC4"):
+            for item in tqdm(dataset['train'], desc="C4"):
                 text = item.get('text', '').strip()
                 
                 if len(text) < min_text_length:
@@ -71,16 +71,16 @@ def download_mc4_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
                     break
         
         final_size_gb = total_size / (1024 * 1024 * 1024)
-        print(f"✅ MC4 downloaded: {final_size_gb:.2f} GB, {text_count:,} texts")
+        print(f"✅ C4 downloaded: {final_size_gb:.2f} GB, {text_count:,} texts")
         return True
     
     except Exception as e:
-        print(f"❌ MC4 download error: {e}")
+        print(f"❌ C4 download error: {e}")
         return False
 
 def download_wikipedia_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
     """
-    Wikipedia Turkish corpus indir
+    OSCAR Turkish corpus indir (updated from deprecated wikipedia)
     
     Args:
         output_file: Çıktı dosyası
@@ -89,18 +89,18 @@ def download_wikipedia_turkish(output_file: str, max_size_gb: float = 0.75) -> b
     Returns:
         Başarılı mı?
     """
-    print(f"📥 Downloading Wikipedia Turkish corpus...")
+    print(f"📥 Downloading OSCAR Turkish corpus...")
     print(f"   Target size: {max_size_gb} GB")
     
     try:
-        dataset = load_dataset("wikipedia", "20220301.tr", streaming=True)
+        dataset = load_dataset("oscar", "unshuffled_deduplicated_tr", streaming=True)
         max_size_bytes = int(max_size_gb * 1024 * 1024 * 1024)
         
         total_size = 0
         text_count = 0
         
         with open(output_file, 'w', encoding='utf-8') as f:
-            for item in tqdm(dataset['train'], desc="Wikipedia"):
+            for item in tqdm(dataset['train'], desc="OSCAR"):
                 text = item.get('text', '').strip()
                 
                 if len(text) < 100:
@@ -120,11 +120,11 @@ def download_wikipedia_turkish(output_file: str, max_size_gb: float = 0.75) -> b
                     break
         
         final_size_gb = total_size / (1024 * 1024 * 1024)
-        print(f"✅ Wikipedia downloaded: {final_size_gb:.2f} GB, {text_count:,} texts")
+        print(f"✅ OSCAR downloaded: {final_size_gb:.2f} GB, {text_count:,} texts")
         return True
     
     except Exception as e:
-        print(f"❌ Wikipedia download error: {e}")
+        print(f"❌ OSCAR download error: {e}")
         return False
 
 def merge_corpus_files(file1: str, file2: str, output_file: str) -> bool:

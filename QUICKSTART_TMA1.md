@@ -1,15 +1,18 @@
+// Developer: inkbytefo
+// AI: Trae Coding Assistant
+// Modified: 2025-11-01
+
 # 🚀 TMA-1 Quick Start - MorphoPiece Tokenizer Eğitimi
 
 ## Hızlı Başlangıç
 
 ```bash
-# Tüm adımları otomatik çalıştır
-python src/train_morphopiece.py --all
+# Küçük veriyle hızlı kurulum
+python scripts/make_test_corpus.py
 
 # Adım adım
-python src/train_morphopiece.py --download      # 1. Veri indir
-python src/train_morphopiece.py --preprocess   # 2. Morfem ayrımı ile işle
-python src/train_morphopiece.py --train        # 3. Tokenizer eğit
+python src/train_morphopiece.py --preprocess   --corpus-file data/test_corpus.txt --preprocessed-file data/corpus_morpho_processed.txt
+python src/train_morphopiece.py --train        --preprocessed-file data/corpus_morpho_processed.txt --output tokenizer/morphopiece --vocab-size 1000
 ```
 
 ## Detaylı Kullanım
@@ -17,11 +20,8 @@ python src/train_morphopiece.py --train        # 3. Tokenizer eğit
 ### 1. Veri İndirme (1.5 GB)
 
 ```bash
-# MC4 (0.75 GB) + Wikipedia (0.75 GB)
-python src/train_morphopiece.py --download \
-    --mc4-size 0.75 \
-    --wikipedia-size 0.75 \
-    --corpus-file data/corpus_combined.txt
+# Opsiyonel: Büyük corpus indirme (internet ve disk gerektirir)
+python src/train_morphopiece.py --download --corpus-file data/corpus_combined.txt
 ```
 
 **Çıktı:**
@@ -32,10 +32,8 @@ python src/train_morphopiece.py --download \
 ### 2. Morfem Ayrımı ile Ön İşleme
 
 ```bash
-# Zemberek ile morfem ayrımı
-python src/train_morphopiece.py --preprocess \
-    --corpus-file data/corpus_combined.txt \
-    --preprocessed-file data/corpus_morpho_processed.txt
+# Morfem ayrımı (Zemberek varsa Java ile, yoksa regex fallback)
+python src/train_morphopiece.py --preprocess --corpus-file data/corpus_combined.txt --preprocessed-file data/corpus_morpho_processed.txt
 ```
 
 **İşlem:**
@@ -49,12 +47,7 @@ python src/train_morphopiece.py --preprocess \
 
 ```bash
 # SentencePiece ile tokenizer eğit
-python src/train_morphopiece.py --train \
-    --preprocessed-file data/corpus_morpho_processed.txt \
-    --output tokenizer/morphopiece \
-    --vocab-size 32000 \
-    --model-type unigram \
-    --character-coverage 1.0
+python src/train_morphopiece.py --train --preprocessed-file data/corpus_morpho_processed.txt --output tokenizer/morphopiece --vocab-size 32000 --model-type unigram --character-coverage 1.0
 ```
 
 **Parametreler:**
@@ -137,8 +130,9 @@ pip install sentencepiece
 ## Sonraki Adımlar
 
 1. ✅ MorphoPiece tokenizer hazır
-2. 🔄 TMA-1 model eğitimi (`train.py` ile)
-3. 🔄 Inference test (`llm_engine.py` ile)
+2. ✅ Testler (`pytest -q`)
+3. 🔄 TMA-1 model eğitimi (`train_tma1.py` ile)
+4. 🔄 Inference testi (`llm_engine.py` ile)
 
 ---
 
