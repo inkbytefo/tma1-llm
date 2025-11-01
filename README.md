@@ -1,5 +1,5 @@
 // Developer: inkbytefo
-// AI: Trae Coding Assistant
+// AI: Claude Sonnet 4.5
 // Modified: 2025-11-01
 
 # TMA-1: Turkish Morphology-Aware Transformer and Tokenizer

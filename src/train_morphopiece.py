@@ -296,7 +296,6 @@ def train_morphopiece(
             'hard_vocab_limit': False,
             'use_all_vocab': False,
             'byte_fallback': True,
-            'vocab_output_piece_score': True,
             'train_extremely_large_corpus': True,  # For large corpus
         }
         

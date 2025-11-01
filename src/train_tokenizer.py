@@ -71,7 +71,6 @@ def train_sentencepiece_tokenizer(
             'hard_vocab_limit': False,
             'use_all_vocab': False,
             'byte_fallback': True,  # Handle OOV
-            'vocab_output_piece_score': True,
             'train_extremely_large_corpus': False,
         }
         
