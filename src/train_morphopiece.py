@@ -6,7 +6,7 @@
 """
 ============================================================================
 MorphoPiece Tokenizer Training Script
-1.5 GB Türkçe corpus (C4 + OSCAR) ile morfem farkındalıklı tokenizer eğitimi
+1.5 GB Türkçe corpus (C4 + Wikipedia) ile morfem farkındalıklı tokenizer eğitimi
 ============================================================================
 """
 
@@ -78,9 +78,9 @@ def download_mc4_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
         print(f"❌ C4 download error: {e}")
         return False
 
-def download_oscar_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
+def download_wikipedia_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
     """
-    OSCAR Turkish corpus indir (updated from deprecated wikipedia)
+    Wikipedia Turkish corpus indir
     
     Args:
         output_file: Çıktı dosyası
@@ -89,21 +89,23 @@ def download_oscar_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
     Returns:
         Başarılı mı?
     """
-    print(f"📥 Downloading OSCAR Turkish corpus...")
+    print(f"📥 Downloading Wikipedia Turkish corpus...")
     print(f"   Target size: {max_size_gb} GB")
     
     try:
-        dataset = load_dataset("oscar", "unshuffled_deduplicated_tr", streaming=True)
+        # Wikipedia dataset from HuggingFace (no authentication required)
+        dataset = load_dataset("wikipedia", "20231101.tr", streaming=True)
         max_size_bytes = int(max_size_gb * 1024 * 1024 * 1024)
         
         total_size = 0
         text_count = 0
+        min_text_length = 100
         
         with open(output_file, 'w', encoding='utf-8') as f:
-            for item in tqdm(dataset['train'], desc="OSCAR"):
+            for item in tqdm(dataset['train'], desc="Wikipedia"):
                 text = item.get('text', '').strip()
                 
-                if len(text) < 100:
+                if len(text) < min_text_length:
                     continue
                 
                 # Normalize whitespace
@@ -120,11 +122,12 @@ def download_oscar_turkish(output_file: str, max_size_gb: float = 0.75) -> bool:
                     break
         
         final_size_gb = total_size / (1024 * 1024 * 1024)
-        print(f"✅ OSCAR downloaded: {final_size_gb:.2f} GB, {text_count:,} texts")
+        print(f"✅ Wikipedia downloaded: {final_size_gb:.2f} GB, {text_count:,} texts")
         return True
     
     except Exception as e:
-        print(f"❌ OSCAR download error: {e}")
+        print(f"❌ Wikipedia download error: {e}")
+        print(f"💡 Tip: Wikipedia dataset requires 'datasets' library")
         return False
 
 def merge_corpus_files(file1: str, file2: str, output_file: str) -> bool:
@@ -428,7 +431,7 @@ def main():
         
         # Download Wikipedia
         if not os.path.exists(wiki_file) or os.path.getsize(wiki_file) < 1000:
-            download_oscar_turkish(wiki_file, args.wikipedia_size)
+            download_wikipedia_turkish(wiki_file, args.wikipedia_size)
         else:
             print(f"✅ Wikipedia corpus already exists: {wiki_file}")
         

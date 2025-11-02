@@ -161,6 +161,7 @@ def count_grammar_violations(
 def train_tma1(
     model: TMA1Model,
     dataloader: DataLoader,
+    val_dataloader: DataLoader,
     tokenizer: MorphoPiece,
     grammar_engine: GrammarEngine,
     optimizer: torch.optim.Optimizer,
@@ -265,7 +266,7 @@ def train_tma1(
                 'step': current_step
             })
         
-        # Evaluation (simple validation)
+        # Evaluation (validation set)
         if current_step % eval_every == 0:
             model.eval()
             val_loss = 0.0
@@ -273,7 +274,7 @@ def train_tma1(
             val_steps = 0
             
             with torch.no_grad():
-                for val_batch in dataloader:
+                for val_batch in val_dataloader:
                     if val_steps >= 10:  # Limit validation steps
                         break
                     
@@ -323,11 +324,20 @@ def train_tma1(
             avg_val_loss = val_loss / val_steps
             avg_val_violations = val_violations / val_steps
             
+            # Calculate Perplexity (PPL) from validation loss
+            # Perplexity = exp(loss), lower is better
+            val_perplexity = torch.exp(torch.tensor(avg_val_loss)).item()
+            train_perplexity = torch.exp(torch.tensor(avg_loss)).item()
+            
+            # Log metrics to TensorBoard
             writer.add_scalar('Validation/Loss', avg_val_loss, current_step)
             writer.add_scalar('Validation/GrammarViolations', avg_val_violations, current_step)
+            writer.add_scalar('Validation/Perplexity', val_perplexity, current_step)
+            writer.add_scalar('Train/Perplexity', train_perplexity, current_step)
             
             model.train()
             tqdm.write(f"Step {current_step}: Train Loss = {avg_loss:.4f}, Val Loss = {avg_val_loss:.4f}")
+            tqdm.write(f"  Train PPL = {train_perplexity:.2f}, Val PPL = {val_perplexity:.2f}")
             tqdm.write(f"  Grammar Violations - Train: {avg_violations:.1f}, Val: {avg_val_violations:.1f}")
         
         # Save checkpoint (every 500 steps)
@@ -356,7 +366,9 @@ def main():
     
     # Data
     parser.add_argument('--corpus', type=str, default='data/corpus_morpho_processed.txt',
-                       help='Path to morphologically processed corpus')
+                       help='Path to training corpus (morphologically processed)')
+    parser.add_argument('--val-corpus', type=str, default=None,
+                       help='Path to validation corpus (morphologically processed). If not provided, uses training corpus for validation (not recommended)')
     parser.add_argument('--tokenizer', type=str, default='tokenizer/morphopiece.model',
                        help='Path to MorphoPiece tokenizer model')
     
@@ -484,16 +496,17 @@ def main():
         print(f"   ⚠️  WARNING: Using text format is SLOW! Preprocess corpus first:")
         print(f"      python scripts/preprocess_for_tma1.py --input {args.corpus} --output {args.corpus}.jsonl --tokenizer {args.tokenizer}")
     
-    # Use MorphoPiece tokenizer for dataset
-    dataset = TurkishTextDataset(
+    # Create training dataset and dataloader
+    print(f"\n📂 Loading training dataset...")
+    train_dataset = TurkishTextDataset(
         corpus_file=args.corpus,
         tokenizer=tokenizer.sp_processor,  # Use SentencePiece processor directly
         max_seq_len=args.max_seq_len,
         is_jsonl=is_jsonl
     )
     
-    dataloader = DataLoader(
-        dataset,
+    train_dataloader = DataLoader(
+        train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=4,
@@ -501,8 +514,43 @@ def main():
         drop_last=True
     )
     
-    print(f"   Batch size: {args.batch_size}")
-    print(f"   Dataset size: {len(dataset):,} examples")
+    print(f"   Training batch size: {args.batch_size}")
+    print(f"   Training dataset size: {len(train_dataset):,} examples")
+    
+    # Create validation dataset and dataloader
+    if args.val_corpus and os.path.exists(args.val_corpus):
+        print(f"\n📂 Loading validation dataset...")
+        print(f"   Validation corpus: {args.val_corpus}")
+        val_is_jsonl = args.val_corpus.endswith('.jsonl')
+        
+        val_dataset = TurkishTextDataset(
+            corpus_file=args.val_corpus,
+            tokenizer=tokenizer.sp_processor,
+            max_seq_len=args.max_seq_len,
+            is_jsonl=val_is_jsonl
+        )
+        
+        val_dataloader = DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,  # Don't shuffle validation set
+            num_workers=4,
+            pin_memory=torch.cuda.is_available(),
+            drop_last=False  # Don't drop last batch in validation
+        )
+        
+        print(f"   Validation batch size: {args.batch_size}")
+        print(f"   Validation dataset size: {len(val_dataset):,} examples")
+    else:
+        print(f"\n⚠️  WARNING: No validation corpus provided!")
+        if args.val_corpus:
+            print(f"   Validation corpus file not found: {args.val_corpus}")
+        print(f"   Using training data for validation (NOT RECOMMENDED)")
+        print(f"   💡 Use --split-dataset in preprocess_for_tma1.py to create validation set:")
+        print(f"      python scripts/preprocess_for_tma1.py --split-dataset --input <corpus> --output <output> --tokenizer <tokenizer>")
+        
+        # Fallback: Use training dataloader for validation (not recommended)
+        val_dataloader = train_dataloader
     
     # Optimizer
     optimizer = AdamW(
@@ -514,7 +562,7 @@ def main():
     )
     
     # Learning rate scheduler
-    total_steps = len(dataloader) * args.num_epochs
+    total_steps = len(train_dataloader) * args.num_epochs
     scheduler = CosineAnnealingLR(
         optimizer,
         T_max=total_steps - args.warmup_steps,
@@ -545,7 +593,8 @@ def main():
     try:
         final_step = train_tma1(
             model=model,
-            dataloader=dataloader,
+            dataloader=train_dataloader,
+            val_dataloader=val_dataloader,
             tokenizer=tokenizer,
             grammar_engine=grammar_engine,
             optimizer=optimizer,

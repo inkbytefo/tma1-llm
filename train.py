@@ -23,7 +23,8 @@ import json
 from datetime import datetime
 
 from src.model import TransformerModel, ModelConfig
-from src.dataset import create_dataloader
+from src.dataset import TurkishTextDataset
+from torch.utils.data import DataLoader
 
 def save_checkpoint(
     model: TransformerModel,
@@ -97,6 +98,7 @@ def load_checkpoint(
 def train(
     model: TransformerModel,
     dataloader,
+    val_dataloader,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler._LRScheduler,
     device: torch.device,
@@ -163,15 +165,14 @@ def train(
                 'step': current_step
             })
         
-        # Evaluation (simple validation loss)
+        # Evaluation (validation set)
         if current_step % eval_every == 0:
             model.eval()
             val_loss = 0.0
             val_steps = 0
             
             with torch.no_grad():
-                # Simple validation on same data (in production, use separate validation set)
-                for val_batch in dataloader:
+                for val_batch in val_dataloader:
                     if val_steps >= 10:  # Limit validation steps
                         break
                     
@@ -187,10 +188,20 @@ def train(
                     val_steps += 1
             
             avg_val_loss = val_loss / val_steps
+            
+            # Calculate Perplexity (PPL) from loss
+            # Perplexity = exp(loss), lower is better
+            val_perplexity = torch.exp(torch.tensor(avg_val_loss)).item()
+            train_perplexity = torch.exp(torch.tensor(avg_loss)).item()
+            
+            # Log metrics to TensorBoard
             writer.add_scalar('Validation/Loss', avg_val_loss, current_step)
+            writer.add_scalar('Validation/Perplexity', val_perplexity, current_step)
+            writer.add_scalar('Train/Perplexity', train_perplexity, current_step)
             
             model.train()
             tqdm.write(f"Step {current_step}: Train Loss = {avg_loss:.4f}, Val Loss = {avg_val_loss:.4f}")
+            tqdm.write(f"  Train PPL = {train_perplexity:.2f}, Val PPL = {val_perplexity:.2f}")
         
         # Save checkpoint
         if current_step % save_every == 0:
@@ -207,6 +218,8 @@ def main():
     parser = argparse.ArgumentParser(description='Train Turkish LLM')
     parser.add_argument('--corpus', type=str, default='data/corpus.txt',
                        help='Path to training corpus')
+    parser.add_argument('--val-corpus', type=str, default=None,
+                       help='Path to validation corpus. If not provided, uses training corpus for validation (not recommended)')
     parser.add_argument('--tokenizer', type=str, default='tokenizer/tr_tokenizer.model',
                        help='Path to SentencePiece tokenizer')
     parser.add_argument('--output-dir', type=str, default='models',
@@ -254,20 +267,31 @@ def main():
         print(f"   GPU: {torch.cuda.get_device_name(0)}")
         print(f"   Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
     
+    print("\n" + "=" * 60)
+    print("    Baseline Transformer Training")
+    print("=" * 60)
+    
+    # Load tokenizer first to get actual vocab size
+    from sentencepiece import SentencePieceProcessor
+    print(f"\n📥 Loading tokenizer...")
+    print(f"   Path: {args.tokenizer}")
+    
+    tokenizer = SentencePieceProcessor(model_file=args.tokenizer)
+    actual_vocab_size = tokenizer.vocab_size()
+    pad_token_id = tokenizer.pad_id() if tokenizer.pad_id() >= 0 else tokenizer.unk_id()
+    print(f"✅ Tokenizer loaded (vocab size: {actual_vocab_size:,})")
+    
     # Model configuration
     config = ModelConfig(
-        vocab_size=args.vocab_size,
+        vocab_size=actual_vocab_size,
         hidden_size=args.hidden_size,
         num_layers=args.num_layers,
         num_heads=args.num_heads,
         ffn_size=args.ffn_size,
         max_seq_len=args.max_seq_len,
-        pad_token_id=0
+        pad_token_id=pad_token_id
     )
     
-    print("\n" + "=" * 60)
-    print("    QuantumSoul LLM Training")
-    print("=" * 60)
     print(f"\n📊 Model Configuration:")
     print(f"   Vocabulary size: {config.vocab_size:,}")
     print(f"   Hidden size: {config.hidden_size}")
@@ -277,28 +301,82 @@ def main():
     print(f"   Max sequence length: {config.max_seq_len}")
     
     # Create model
+    print(f"\n🧠 Creating baseline transformer model...")
     model = TransformerModel(config)
     model = model.to(device)
     
     num_params = model.get_num_params()
-    print(f"\n🧠 Model parameters: {num_params:,} ({num_params / 1e6:.2f}M)")
+    print(f"✅ Baseline model created")
+    print(f"   Parameters: {num_params:,} ({num_params / 1e6:.2f}M)")
     
-    # Create data loader
-    print(f"\n📂 Loading dataset...")
+    # Create training dataset and dataloader
+    print(f"\n📂 Loading training dataset...")
     print(f"   Corpus: {args.corpus}")
-    print(f"   Tokenizer: {args.tokenizer}")
     
-    dataloader, tokenizer = create_dataloader(
+    if not os.path.exists(args.corpus):
+        print(f"❌ Corpus file not found: {args.corpus}")
+        return
+    
+    # Check if corpus is JSONL (preprocessed) or text
+    is_jsonl = args.corpus.endswith('.jsonl')
+    if is_jsonl:
+        print(f"   Format: JSONL (preprocessed)")
+    else:
+        print(f"   Format: Text")
+    
+    train_dataset = TurkishTextDataset(
         corpus_file=args.corpus,
-        tokenizer_path=args.tokenizer,
-        batch_size=args.batch_size,
+        tokenizer=tokenizer,
         max_seq_len=args.max_seq_len,
-        num_workers=4,
-        shuffle=True
+        is_jsonl=is_jsonl
     )
     
-    print(f"   Batch size: {args.batch_size}")
-    print(f"   Dataset size: {len(dataloader.dataset):,} examples")
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=torch.cuda.is_available(),
+        drop_last=True
+    )
+    
+    print(f"   Training batch size: {args.batch_size}")
+    print(f"   Training dataset size: {len(train_dataset):,} examples")
+    
+    # Create validation dataset and dataloader
+    if args.val_corpus and os.path.exists(args.val_corpus):
+        print(f"\n📂 Loading validation dataset...")
+        print(f"   Validation corpus: {args.val_corpus}")
+        val_is_jsonl = args.val_corpus.endswith('.jsonl')
+        
+        val_dataset = TurkishTextDataset(
+            corpus_file=args.val_corpus,
+            tokenizer=tokenizer,
+            max_seq_len=args.max_seq_len,
+            is_jsonl=val_is_jsonl
+        )
+        
+        val_dataloader = DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,  # Don't shuffle validation set
+            num_workers=4,
+            pin_memory=torch.cuda.is_available(),
+            drop_last=False  # Don't drop last batch in validation
+        )
+        
+        print(f"   Validation batch size: {args.batch_size}")
+        print(f"   Validation dataset size: {len(val_dataset):,} examples")
+    else:
+        print(f"\n⚠️  WARNING: No validation corpus provided!")
+        if args.val_corpus:
+            print(f"   Validation corpus file not found: {args.val_corpus}")
+        print(f"   Using training data for validation (NOT RECOMMENDED)")
+        print(f"   💡 Use --split-dataset in preprocess_for_tma1.py to create validation set:")
+        print(f"      python scripts/preprocess_for_tma1.py --split-dataset --input <corpus> --output <output> --tokenizer <tokenizer>")
+        
+        # Fallback: Use training dataloader for validation (not recommended)
+        val_dataloader = train_dataloader
     
     # Optimizer
     optimizer = AdamW(
@@ -310,7 +388,7 @@ def main():
     )
     
     # Learning rate scheduler
-    total_steps = len(dataloader) * args.num_epochs
+    total_steps = len(train_dataloader) * args.num_epochs
     scheduler = CosineAnnealingLR(
         optimizer,
         T_max=total_steps - args.warmup_steps,
@@ -339,7 +417,8 @@ def main():
     try:
         final_step = train(
             model=model,
-            dataloader=dataloader,
+            dataloader=train_dataloader,
+            val_dataloader=val_dataloader,
             optimizer=optimizer,
             scheduler=scheduler,
             device=device,
