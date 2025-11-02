@@ -111,8 +111,15 @@ class TMA1Model(nn.Module):
         # Embedding layer
         self.embedding = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
         
-        # Morfolojik tip embedding (opsiyonel)
-        self.morpho_embedding = nn.Embedding(5, config.hidden_size)  # root, suffix, verb, other, pad
+        # Morfolojik tip embedding (detaylı - 23 kategori)
+        # 0=pad, 1=special, 2-5=kökler, 6-11=iyelik, 12-16=durum, 17-20=zaman, 21=çoğul, 22=other
+        NUM_MORPHEME_TYPES = 23
+        self.morpho_embedding = nn.Embedding(NUM_MORPHEME_TYPES, config.hidden_size)
+        
+        # Semantic category embedding (12 kategori: pad, special, mekan, zaman, insan, hayvan, duygu, eşya, yiyecek, fiil_eylem, sıfat, belirsiz)
+        # MORFOSEMANTIK TOKENIZATION
+        NUM_SEMANTIC_CATEGORIES = 12
+        self.semantic_embedding = nn.Embedding(NUM_SEMANTIC_CATEGORIES, config.hidden_size)
         
         # TMA-1 Transformer layers
         self.layers = nn.ModuleList([
@@ -184,6 +191,7 @@ class TMA1Model(nn.Module):
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         morpho_types: Optional[torch.Tensor] = None,
+        semantic_categories: Optional[torch.Tensor] = None,
         token_texts: Optional[List[List[str]]] = None,
         past_key_values: Optional[List] = None,
         use_cache: bool = False,
@@ -196,6 +204,7 @@ class TMA1Model(nn.Module):
             input_ids: [batch, seq_len]
             attention_mask: [batch, seq_len]
             morpho_types: Morfolojik tip tensor [batch, seq_len] (öncelikli)
+            semantic_categories: Anlamsal kategori tensor [batch, seq_len] (MORFOSEMANTIK TOKENIZATION)
             token_texts: Token string listesi (fallback, sadece morpho_types yoksa)
             past_key_values: KV cache
             use_cache: Cache kullanılsın mı?
@@ -209,6 +218,32 @@ class TMA1Model(nn.Module):
         
         # Embedding lookup
         hidden_states = self.embedding(input_ids)  # [batch, seq_len, hidden_size]
+        
+        # Add morpheme type embeddings (EXPLICIT MORPHEME REPRESENTATIONS)
+        if morpho_types is not None:
+            # Clamp morpho_types to valid range [0, 22]
+            morpho_types_clamped = torch.clamp(morpho_types, 0, 22)
+            morpho_emb = self.morpho_embedding(morpho_types_clamped)  # [batch, seq_len, hidden_size]
+            # Additive combination (embedding + morpheme type embedding)
+            hidden_states = hidden_states + morpho_emb
+        else:
+            # Fallback: if morpho_types not provided, use pad (0) for all tokens
+            pad_morpho_types = torch.zeros_like(input_ids, dtype=torch.long)
+            morpho_emb = self.morpho_embedding(pad_morpho_types)
+            hidden_states = hidden_states + morpho_emb
+        
+        # Add semantic category embeddings (MORFOSEMANTIK TOKENIZATION)
+        if semantic_categories is not None:
+            # Clamp semantic_categories to valid range [0, 11]
+            semantic_categories_clamped = torch.clamp(semantic_categories, 0, 11)
+            semantic_emb = self.semantic_embedding(semantic_categories_clamped)  # [batch, seq_len, hidden_size]
+            # Additive combination (embedding + morpho embedding + semantic embedding)
+            hidden_states = hidden_states + semantic_emb
+        else:
+            # Fallback: if semantic_categories not provided, use belirsiz (11) for all tokens
+            pad_semantic_categories = torch.full_like(input_ids, 11, dtype=torch.long)  # belirsiz
+            semantic_emb = self.semantic_embedding(pad_semantic_categories)
+            hidden_states = hidden_states + semantic_emb
         
         # Add positional encoding
         hidden_states = hidden_states + self.pos_encoding[:, :seq_len, :]

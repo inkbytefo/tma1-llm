@@ -56,6 +56,19 @@ This document describes the end-to-end architecture of the TMA-1 stack, covering
   - Suffix order validation
   - Sequence validation utilities
 
+## Explicit Morpheme Representations (NEW - Feature Enhancement)
+
+- **23 Detailed Morpheme Categories**: Extended from 5 basic categories to 23 fine-grained types:
+  - Roots: `isim_kök`, `fiil_kök`, `sıfat_kök`, `zarf_kök`
+  - Possessive suffixes: `iyelik_1tekil`, `iyelik_2tekil`, `iyelik_3tekil`, `iyelik_1çoğul`, `iyelik_2çoğul`, `iyelik_3çoğul`
+  - Case suffixes: `belirtme`, `yönelme`, `bulunma`, `ayrılma`, `ilgi`
+  - Tense suffixes: `geçmiş_zaman`, `şimdiki_zaman`, `gelecek_zaman`, `geniş_zaman`
+  - Other: `çoğul`, `other`, `pad`, `special`
+- **Morpheme Embeddings**: Separate `nn.Embedding` layer (23 categories × hidden_size) that learns explicit representations for each morpheme type
+- **Additive Combination**: Word embeddings + morpheme type embeddings are combined additively in the input layer
+- **Benefits**: Model learns shared semantic knowledge across morphemes (e.g., all "çoğul" suffixes share similar meaning), enabling better generalization and zero-shot capabilities
+- **Preprocessing**: `preprocess_for_tma1.py` generates detailed `morpho_types` with 23 categories using `get_detailed_morpho_type()` function
+
 ## Agglutinative Attention
 
 - Uses morphological labels to alter attention patterns (optimized):
@@ -65,6 +78,7 @@ This document describes the end-to-end architecture of the TMA-1 stack, covering
   - Verb tokens receive extra bias for SOV structure
   - Suffix tokens are treated with position-aware adjustments
   - **Performance**: Preprocessed `morpho_types` eliminates MorphoSplitter calls during training (10-100x speedup)
+  - **Updated**: Now supports 23 detailed morpheme categories (compatible with Explicit Morpheme Representations)
 
 ## Training Loops
 

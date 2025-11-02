@@ -80,7 +80,7 @@ pytest -q
 - Data is downloaded via `src/data_collector.py` from HF datasets and cleaned. For testing, use `scripts/make_test_corpus.py` and `tests/test_corpus.txt`.
 - `train_morphopiece.py` can preprocess raw text by splitting into morphemes, producing `corpus_morpho_processed.txt`.
 - SentencePiece tokenizer is trained on morpheme-separated text, ensuring morphemes appear as distinct tokens.
-- **NEW**: `scripts/preprocess_for_tma1.py` preprocesses corpus with morphological analysis, outputting JSONL format with `morpho_types` (0=root, 1=suffix, 2=verb, 3=other, 4=pad) for each token. This eliminates runtime morphological analysis during training, providing **10-100x speedup**.
+- **NEW**: `scripts/preprocess_for_tma1.py` preprocesses corpus with morphological analysis, outputting JSONL format with `morpho_types` (23 detailed categories: kökler, iyelik, durum, zaman ekleri, vb.) for each token. This eliminates runtime morphological analysis during training, providing **10-100x speedup**.
 - The dataset (`src/dataset.py`) supports both text and JSONL formats:
   - **Text format**: Encodes via SentencePiece, pads/truncates, yields input/target pairs (fallback mode, slower)
   - **JSONL format**: Reads preprocessed `morpho_types` tensors directly (recommended, fast)
@@ -90,9 +90,10 @@ pytest -q
 ## Core Concepts
 
 - Morphology Awareness: Words are split into root + suffix tokens to better capture agglutinative structure.
-- **Preprocessing Optimization**: Morphological analysis is performed **once during preprocessing**, not during training. Results are cached in JSONL format with `morpho_types` tensors for each token.
+- **Explicit Morpheme Representations (NEW)**: Model uses separate embeddings for 23 detailed morpheme types (kökler, iyelik ekleri, durum ekleri, zaman ekleri, vb.). These embeddings are additively combined with word embeddings, enabling the model to learn shared semantic knowledge across morphemes and improve generalization.
+- **Preprocessing Optimization**: Morphological analysis is performed **once during preprocessing**, not during training. Results are cached in JSONL format with `morpho_types` tensors for each token (23 categories).
 - Grammar Biasing: **Vectorized** logit adjustments enforce vowel harmony and typical suffix sequences using PyTorch tensor operations (no vocabulary loops), providing significant performance improvements.
-- Attention Augmentation: Tokens are labeled as root/suffix/verb (via preprocessed `morpho_types`), and attention applies learned biases based on these types using efficient tensor operations.
+- Attention Augmentation: Tokens are labeled with detailed morpheme types (via preprocessed `morpho_types`), and attention applies learned biases based on these types using efficient tensor operations.
 
 ## Ownership and Licensing
 

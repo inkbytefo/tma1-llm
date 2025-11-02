@@ -57,8 +57,11 @@ class AgglutinativeAttention(nn.Module):
         self.v_proj = nn.Linear(hidden_size, hidden_size)
         self.o_proj = nn.Linear(hidden_size, hidden_size)
         
-        # Morfolojik tip embeddings
-        self.morpho_embedding = nn.Embedding(5, hidden_size)  # root, suffix, verb, other, pad
+        # Morfolojik tip embeddings (23 kategori - TMA1Model ile uyumlu)
+        # Not: Bu embedding şu an kullanılmıyor (sadece bias maskesi kullanılıyor)
+        # Gelecekte kullanılabilir, şimdilik uyumluluk için 23 olarak bırakılıyor
+        NUM_MORPHEME_TYPES = 23
+        self.morpho_embedding = nn.Embedding(NUM_MORPHEME_TYPES, hidden_size)
         
     def _identify_morpho_types(
         self,

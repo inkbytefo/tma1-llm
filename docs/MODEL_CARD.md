@@ -1,6 +1,3 @@
-// Developer: inkbytefo
-// AI: Trae Coding Assistant
-// Modified: 2025-11-01
 
 # Model Card: TMA-1 and MorphoPiece
 

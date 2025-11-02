@@ -191,10 +191,14 @@ def train_tma1(
         target_ids = batch['target_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         
-        # Get morpho_types from batch (if available - from preprocessing)
+        # Get morpho_types and semantic_categories from batch (if available - from preprocessing)
         morpho_types = None
         if 'morpho_types' in batch:
             morpho_types = batch['morpho_types'].to(device)
+        
+        semantic_categories = None
+        if 'semantic_categories' in batch:
+            semantic_categories = batch['semantic_categories'].to(device)
         
         # Fallback: Get token texts only if morpho_types not available (SLOW)
         token_texts = None
@@ -215,6 +219,7 @@ def train_tma1(
             input_ids,
             attention_mask=attention_mask,
             morpho_types=morpho_types,
+            semantic_categories=semantic_categories,
             token_texts=token_texts,
             vocab=vocab if morpho_types is None else None,
             use_cache=False
@@ -282,10 +287,14 @@ def train_tma1(
                     val_target_ids = val_batch['target_ids'].to(device)
                     val_attention_mask = val_batch['attention_mask'].to(device)
                     
-                    # Get morpho_types from batch (if available)
+                    # Get morpho_types and semantic_categories from batch (if available)
                     val_morpho_types = None
                     if 'morpho_types' in val_batch:
                         val_morpho_types = val_batch['morpho_types'].to(device)
+                    
+                    val_semantic_categories = None
+                    if 'semantic_categories' in val_batch:
+                        val_semantic_categories = val_batch['semantic_categories'].to(device)
                     
                     # Fallback: Get token texts only if morpho_types not available
                     val_token_texts = None
@@ -305,6 +314,7 @@ def train_tma1(
                         val_input_ids,
                         attention_mask=val_attention_mask,
                         morpho_types=val_morpho_types,
+                        semantic_categories=val_semantic_categories,
                         token_texts=val_token_texts,
                         vocab=vocab if val_morpho_types is None else None
                     )

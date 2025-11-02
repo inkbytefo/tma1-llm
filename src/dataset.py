@@ -120,13 +120,14 @@ class TurkishTextDataset(Dataset):
         
         # Process data based on format
         if self.is_jsonl:
-            # JSONL format: data already has tokens and morpho_types
+            # JSONL format: data already has tokens, morpho_types, and semantic_categories
             tokens = data.get("tokens", [])
             morpho_types_list = data.get("morpho_types", [])
+            semantic_categories_list = data.get("semantic_categories", [])
             
             # Encode tokens to IDs
             token_ids = []
-            for token in tokens:
+            for i, token in enumerate(tokens):
                 # Encode single token (SentencePiece handles tokenization)
                 # If token is a SentencePiece piece, encode it directly
                 try:
@@ -134,27 +135,37 @@ class TurkishTextDataset(Dataset):
                     ids = self.tokenizer.encode(token, out_type=int)
                     if ids:
                         token_ids.extend(ids)
-                        # If token maps to multiple IDs, extend morpho_types accordingly
+                        # If token maps to multiple IDs, extend morpho_types and semantic_categories accordingly
                         if len(ids) > 1:
-                            morpho_types_list.extend([morpho_types_list[-1] if morpho_types_list else 3] * (len(ids) - 1))
+                            last_morpho = morpho_types_list[-1] if morpho_types_list else 3
+                            last_semantic = semantic_categories_list[-1] if semantic_categories_list else 11
+                            morpho_types_list.extend([last_morpho] * (len(ids) - 1))
+                            semantic_categories_list.extend([last_semantic] * (len(ids) - 1))
                     else:
                         # Fallback: use UNK
                         token_ids.append(self.tokenizer.unk_id())
                         morpho_types_list.append(3)  # Other
+                        semantic_categories_list.append(11)  # belirsiz
                 except:
                     # Fallback: use UNK
                     token_ids.append(self.tokenizer.unk_id())
                     morpho_types_list.append(3)  # Other
+                    semantic_categories_list.append(11)  # belirsiz
             
-            # Ensure morpho_types_list matches token_ids length
+            # Ensure morpho_types_list and semantic_categories_list match token_ids length
             while len(morpho_types_list) < len(token_ids):
                 morpho_types_list.append(3)  # Other
             morpho_types_list = morpho_types_list[:len(token_ids)]
+            
+            while len(semantic_categories_list) < len(token_ids):
+                semantic_categories_list.append(11)  # belirsiz
+            semantic_categories_list = semantic_categories_list[:len(token_ids)]
         else:
             # Text format: tokenize normally
             text = data if isinstance(data, str) else ""
             token_ids = self.tokenizer.encode(text, out_type=int)
             morpho_types_list = [3] * len(token_ids)  # Default: other (will be ignored)
+            semantic_categories_list = [11] * len(token_ids)  # Default: belirsiz (will be ignored)
         
         # Truncate if too long
         if len(token_ids) > self.max_seq_len:
@@ -162,18 +173,22 @@ class TurkishTextDataset(Dataset):
             start = random.randint(0, len(token_ids) - self.max_seq_len)
             token_ids = token_ids[start:start + self.max_seq_len]
             morpho_types_list = morpho_types_list[start:start + self.max_seq_len]
+            semantic_categories_list = semantic_categories_list[start:start + self.max_seq_len]
         
         # Create input and target (shifted by 1 for language modeling)
         input_ids = token_ids[:-1]
         target_ids = token_ids[1:]
         input_morpho_types = morpho_types_list[:-1]
         target_morpho_types = morpho_types_list[1:]
+        input_semantic_categories = semantic_categories_list[:-1]
+        target_semantic_categories = semantic_categories_list[1:]
 
         # Pad to max_seq_len
         pad_id = self.tokenizer.pad_id()
         if pad_id < 0:
             pad_id = self.tokenizer.unk_id()
-        pad_morpho_type = 4  # pad type
+        pad_morpho_type = 0  # pad type (yeni mapping'de pad=0)
+        pad_semantic_category = 0  # pad semantic category
         
         padding_len = self.max_seq_len - len(input_ids) - 1
         if padding_len > 0:
@@ -181,6 +196,8 @@ class TurkishTextDataset(Dataset):
             target_ids = target_ids + [pad_id] * padding_len
             input_morpho_types = input_morpho_types + [pad_morpho_type] * padding_len
             target_morpho_types = target_morpho_types + [pad_morpho_type] * padding_len
+            input_semantic_categories = input_semantic_categories + [pad_semantic_category] * padding_len
+            target_semantic_categories = target_semantic_categories + [pad_semantic_category] * padding_len
         
         result = {
             'input_ids': torch.tensor(input_ids, dtype=torch.long),
@@ -191,9 +208,10 @@ class TurkishTextDataset(Dataset):
             ) if padding_len > 0 else torch.ones(len(input_ids), dtype=torch.long)
         }
         
-        # Add morpho_types if available
+        # Add morpho_types and semantic_categories if available
         if self.is_jsonl:
             result['morpho_types'] = torch.tensor(input_morpho_types, dtype=torch.long)
+            result['semantic_categories'] = torch.tensor(input_semantic_categories, dtype=torch.long)
         
         return result
 
